@@ -12,6 +12,9 @@
 	let geoWatchId: number | undefined;
 	let L: typeof import('leaflet');
 
+	type GeoStatus = 'idle' | 'locating' | 'active' | 'denied' | 'unavailable';
+	let geoStatus = $state<GeoStatus>('idle');
+
 	onMount(async () => {
 		L = (await import('leaflet')).default;
 
@@ -26,7 +29,7 @@
 
 		listingLayer = L.layerGroup().addTo(map);
 
-		tryGeolocate();
+		if (!navigator.geolocation) geoStatus = 'unavailable';
 	});
 
 	onDestroy(() => {
@@ -34,8 +37,16 @@
 		map?.remove();
 	});
 
-	function tryGeolocate() {
-		if (!navigator.geolocation || !L) return;
+	function locate() {
+		if (!navigator.geolocation || !L || !map) return;
+
+		// Clear any existing watch
+		if (geoWatchId != null) {
+			navigator.geolocation.clearWatch(geoWatchId);
+			geoWatchId = undefined;
+		}
+
+		geoStatus = 'locating';
 
 		const dot = L.divIcon({
 			className: '',
@@ -53,12 +64,14 @@
 					positionMarker = L.marker(latlng, { icon: dot, zIndexOffset: 1000 })
 						.bindTooltip('Your location', { permanent: false })
 						.addTo(map!);
+					map!.setView(latlng, Math.max(map!.getZoom(), 12));
 				}
+				geoStatus = 'active';
 			},
-			() => {
-				// permission denied or unavailable — silently ignore
+			(err) => {
+				geoStatus = err.code === err.PERMISSION_DENIED ? 'denied' : 'unavailable';
 			},
-			{ enableHighAccuracy: false, timeout: 10000 }
+			{ enableHighAccuracy: true, timeout: 15000 }
 		);
 	}
 
@@ -106,13 +119,66 @@
 	}
 </script>
 
-<div bind:this={mapEl} class="map"></div>
+<div bind:this={mapEl} class="map">
+	{#if geoStatus !== 'unavailable'}
+		<button
+			class="locate-btn"
+			class:locating={geoStatus === 'locating'}
+			class:active={geoStatus === 'active'}
+			class:denied={geoStatus === 'denied'}
+			onclick={locate}
+			title={geoStatus === 'denied'
+				? 'Location access denied — click to retry'
+				: geoStatus === 'active'
+					? 'Location active — click to re-center'
+					: 'Show my location'}
+		>
+			{#if geoStatus === 'locating'}
+				<span class="spin">⊙</span>
+			{:else}
+				◎
+			{/if}
+		</button>
+	{/if}
+</div>
 
 <style>
 	.map {
 		width: 100%;
 		height: 100%;
+		position: relative;
 	}
+
+	.locate-btn {
+		position: absolute;
+		bottom: 24px;
+		right: 10px;
+		z-index: 1000;
+		width: 34px;
+		height: 34px;
+		border: 2px solid rgba(0, 0, 0, 0.2);
+		border-radius: 4px;
+		background: #fff;
+		cursor: pointer;
+		font-size: 1.1rem;
+		line-height: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #444;
+		box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+		transition: color 0.15s, border-color 0.15s;
+	}
+	.locate-btn:hover { background: #f4f4f4; }
+	.locate-btn.active { color: #4285f4; border-color: #4285f4; }
+	.locate-btn.denied { color: #c0392b; border-color: #c0392b; }
+	.locate-btn.locating { color: #888; }
+
+	.spin {
+		display: inline-block;
+		animation: spin 1s linear infinite;
+	}
+	@keyframes spin { to { transform: rotate(360deg); } }
 
 	:global(.pos-dot) {
 		width: 16px;
