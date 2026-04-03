@@ -47,6 +47,28 @@
 				.catch(() => console.warn(`Could not load ${path}`));
 		}
 
+		fetch('/pois.json')
+			.then((r) => r.json())
+			.then((pois: { name: string; lat: number; lng: number; cat: string }[]) => {
+				const poiLayer = L.layerGroup().addTo(map!);
+				const icon = L.divIcon({
+					className: '',
+					html: '<div class="poi-marker">!</div>',
+					iconSize: [20, 20],
+					iconAnchor: [10, 10],
+					popupAnchor: [0, -12]
+				});
+				for (const poi of pois) {
+					L.marker([poi.lat, poi.lng], { icon, zIndexOffset: 500 })
+						.bindTooltip(`<strong>${poi.name}</strong><br><span class="poi-cat">${poi.cat}</span>`, {
+							direction: 'top',
+							offset: [0, -10]
+						})
+						.addTo(poiLayer);
+				}
+			})
+			.catch(() => console.warn('Could not load pois.json'));
+
 		if (!navigator.geolocation) geoStatus = 'unavailable';
 	});
 
@@ -241,6 +263,21 @@
 		animation: spin 1s linear infinite;
 	}
 	@keyframes spin { to { transform: rotate(360deg); } }
+
+	:global(.poi-marker) {
+		width: 20px;
+		height: 20px;
+		background: #c0392b;
+		color: #fff;
+		font-weight: 900;
+		font-size: 13px;
+		line-height: 18px;
+		text-align: center;
+		border: 2px solid #fff;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+	}
+
+	:global(.poi-cat) { font-size: 0.75rem; color: #666; }
 
 	:global(.marker-lot) {
 		width: 12px;

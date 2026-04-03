@@ -1,0 +1,10 @@
+[
+  { "name": "Grandma",    "lat": 38.749312,  "lng": -77.571216, "cat": "Important" },
+  { "name": "Work",       "lat": 38.514852,  "lng": -77.366495, "cat": "Important" },
+  { "name": "Dad",        "lat": 38.655422,  "lng": -77.641143, "cat": "Important" },
+  { "name": "Mom",        "lat": 38.703191,  "lng": -77.464283, "cat": "Important" },
+  { "name": "Park Ent 1", "lat": 38.8402195, "lng": -78.3024655,"cat": "Park" },
+  { "name": "Park Ent 2", "lat": 38.9056238, "lng": -78.1984948,"cat": "Park" },
+  { "name": "Park Ent 3", "lat": 38.6609533, "lng": -78.3193496,"cat": "Park" },
+  { "name": "Walmart 1",  "lat": 38.9599757, "lng": -78.1880590, "cat": "Grocery" }
+]
