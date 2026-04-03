@@ -29,6 +29,15 @@
 
 		listingLayer = L.layerGroup().addTo(map);
 
+		// Load GeoJSON layers beneath listings
+		const geoStyle = { color: '#228B22', fillColor: '#228B22', fillOpacity: 0.18, weight: 1.5, opacity: 0.5 };
+		for (const path of ['/forest_boundary1.geojson', '/park_boundary1.geojson']) {
+			fetch(path)
+				.then((r) => r.json())
+				.then((data) => L.geoJSON(data, { style: geoStyle }).addTo(map!))
+				.catch(() => console.warn(`Could not load ${path}`));
+		}
+
 		if (!navigator.geolocation) geoStatus = 'unavailable';
 	});
 
