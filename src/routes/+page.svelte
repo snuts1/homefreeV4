@@ -7,6 +7,37 @@
 	let statusMsg = $state('');
 	let errorMsg = $state('');
 
+	// ── color scale ──────────────────────────────────────────────
+	const COLOR_OPTIONS = [
+		{ value: 'none',          label: '— none —',    step: 1 },
+		{ value: 'price',         label: 'Price',       step: 5000 },
+		{ value: 'price_per_sqft',label: '$ / sqft',    step: 5 },
+		{ value: 'year_built',    label: 'Build year',  step: 1 },
+		{ value: 'lot_acres',     label: 'Lot acres',   step: 0.1 },
+	];
+
+	let colorParam = $state('none');
+	let colorMin = $state(0);
+	let colorMax = $state(1);
+
+	const colorStep = $derived(
+		COLOR_OPTIONS.find((o) => o.value === colorParam)?.step ?? 1
+	);
+
+	function setRangeFromData(param: string, data: Listing[]) {
+		if (param === 'none' || data.length === 0) return;
+		const values = data
+			.map((l) => parseFloat(l[param] ?? ''))
+			.filter((v) => !isNaN(v) && v > 0);
+		if (values.length === 0) return;
+		colorMin = Math.floor(Math.min(...values));
+		colorMax = Math.ceil(Math.max(...values));
+	}
+
+	function onParamChange() {
+		setRangeFromData(colorParam, listings);
+	}
+
 	function parseCSV(text: string): Listing[] {
 		const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n');
 		if (lines.length < 2) return [];
@@ -101,6 +132,7 @@
 				});
 
 				listings = valid;
+				setRangeFromData(colorParam, valid);
 				if (valid.length === 0) {
 					errorMsg = 'No rows with valid lat/lng found. Check your column names.';
 				} else {
@@ -138,10 +170,33 @@
 		{#if errorMsg}
 			<span class="status err">{errorMsg}</span>
 		{/if}
+
+		{#if listings.length > 0}
+			<div class="color-row">
+				<label class="ctrl-label">
+					Color by
+					<select bind:value={colorParam} onchange={onParamChange}>
+						{#each COLOR_OPTIONS as opt}
+							<option value={opt.value}>{opt.label}</option>
+						{/each}
+					</select>
+				</label>
+
+				{#if colorParam !== 'none'}
+					<div class="range-control">
+						<span class="swatch" style="background:hsl(120,80%,38%)"></span>
+						<input class="range-input" type="number" bind:value={colorMin} step={colorStep} />
+						<div class="gradient-bar"></div>
+						<input class="range-input" type="number" bind:value={colorMax} step={colorStep} />
+						<span class="swatch" style="background:hsl(0,80%,38%)"></span>
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</header>
 
 	<div class="map-wrap">
-		<Map {listings} />
+		<Map {listings} {colorParam} {colorMin} {colorMax} />
 	</div>
 </div>
 
@@ -217,5 +272,59 @@
 		flex: 1;
 		min-height: 0;
 		position: relative;
+	}
+
+	.color-row {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.3rem 0;
+		flex-wrap: wrap;
+	}
+
+	.ctrl-label {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.8rem;
+		color: #555;
+	}
+	.ctrl-label select {
+		font-size: 0.8rem;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 0.2rem 0.3rem;
+		background: #fff;
+	}
+
+	.range-control {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.swatch {
+		width: 12px;
+		height: 12px;
+		border-radius: 2px;
+		flex-shrink: 0;
+	}
+
+	.range-input {
+		width: 7rem;
+		font-size: 0.8rem;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		padding: 0.2rem 0.35rem;
+		text-align: right;
+	}
+
+	.gradient-bar {
+		width: 80px;
+		height: 10px;
+		border-radius: 3px;
+		background: linear-gradient(to right, hsl(120, 80%, 38%), hsl(60, 80%, 38%), hsl(0, 80%, 38%));
+		flex-shrink: 0;
 	}
 </style>

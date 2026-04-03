@@ -1,12 +1,22 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import 'leaflet/dist/leaflet.css';
-	import type { Map, LayerGroup, Marker } from 'leaflet';
+	import type { Map as LeafletMap, LayerGroup, Marker } from 'leaflet';
 
-	let { listings = [] }: { listings?: Record<string, string>[] } = $props();
+	let {
+		listings = [],
+		colorParam = 'none',
+		colorMin = 0,
+		colorMax = 1
+	}: {
+		listings?: Record<string, string>[];
+		colorParam?: string;
+		colorMin?: number;
+		colorMax?: number;
+	} = $props();
 
 	let mapEl: HTMLDivElement;
-	let map = $state<Map | undefined>(undefined);
+	let map = $state<LeafletMap | undefined>(undefined);
 	let listingLayer = $state<LayerGroup | undefined>(undefined);
 	let positionMarker: Marker | undefined;
 	let geoWatchId: number | undefined;
@@ -29,7 +39,6 @@
 
 		listingLayer = L.layerGroup().addTo(map);
 
-		// Load GeoJSON layers beneath listings
 		const geoStyle = { color: '#228B22', fillColor: '#228B22', fillOpacity: 0.18, weight: 1.5, opacity: 0.5 };
 		for (const path of ['/forest_boundary1.geojson', '/park_boundary1.geojson']) {
 			fetch(path)
@@ -49,7 +58,6 @@
 	function locate() {
 		if (!navigator.geolocation || !L || !map) return;
 
-		// Clear any existing watch
 		if (geoWatchId != null) {
 			navigator.geolocation.clearWatch(geoWatchId);
 			geoWatchId = undefined;
@@ -84,19 +92,35 @@
 		);
 	}
 
+	// Map a normalized 0–1 value to a green→yellow→red HSL color.
+	// Values outside [min, max] are clamped; missing values return gray.
+	function markerColor(listing: Record<string, string>): string {
+		if (colorParam === 'none') return '#d95f02';
+
+		const raw = listing[colorParam];
+		const value = parseFloat(raw ?? '');
+		if (!raw || isNaN(value) || (colorParam !== 'year_built' && value === 0)) return '#999';
+
+		if (colorMin === colorMax) return 'hsl(60, 80%, 40%)';
+		const t = Math.max(0, Math.min(1, (value - colorMin) / (colorMax - colorMin)));
+		return `hsl(${Math.round(120 * (1 - t))}, 80%, 38%)`;
+	}
+
+	function makeLotIcon(color: string) {
+		return L.divIcon({
+			className: '',
+			html: `<div class="marker-lot" style="background:${color}"></div>`,
+			iconSize: [12, 12],
+			iconAnchor: [6, 6],
+			popupAnchor: [0, -8]
+		});
+	}
+
 	$effect(() => {
 		if (!map || !listingLayer || !L) return;
 
 		listingLayer.clearLayers();
 		const bounds: [number, number][] = [];
-
-		const lotIcon = L.divIcon({
-			className: '',
-			html: '<div class="marker-lot"></div>',
-			iconSize: [12, 12],
-			iconAnchor: [6, 6],
-			popupAnchor: [0, -8]
-		});
 
 		for (const listing of listings) {
 			const lat = parseFloat(listing.lat ?? listing.latitude ?? '');
@@ -105,14 +129,15 @@
 
 			const sqft = parseFloat(listing.sqft ?? '');
 			const isLot = !listing.sqft || isNaN(sqft) || sqft === 0;
+			const color = markerColor(listing);
 
 			const marker = isLot
-				? L.marker([lat, lng], { icon: lotIcon })
+				? L.marker([lat, lng], { icon: makeLotIcon(color) })
 				: L.circleMarker([lat, lng], {
 						radius: 7,
 						color: '#fff',
 						weight: 2,
-						fillColor: '#d95f02',
+						fillColor: color,
 						fillOpacity: 0.9
 					});
 
@@ -220,7 +245,6 @@
 	:global(.marker-lot) {
 		width: 12px;
 		height: 12px;
-		background: #d95f02;
 		border: 2px solid #fff;
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 	}
@@ -237,7 +261,9 @@
 	:global(.lp) { font-size: 0.85rem; line-height: 1.5; }
 	:global(.lp-addr) { font-weight: 600; margin-bottom: 2px; }
 	:global(.lp-price) { color: #1a7a1a; font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
+	:global(.lp-ppsf) { font-weight: 400; font-size: 0.8rem; color: #444; }
 	:global(.lp-meta) { display: flex; gap: 0.5rem; color: #444; font-size: 0.8rem; flex-wrap: wrap; }
+	:global(.lp-hoa) { font-size: 0.78rem; color: #666; }
 	:global(.lp-notes) { color: #666; font-size: 0.78rem; margin-top: 4px; }
 	:global(.lp-link) { display: inline-block; margin-top: 6px; color: #1a56db; font-size: 0.8rem; }
 </style>
