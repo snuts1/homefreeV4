@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { slide } from 'svelte/transition';
 	import 'leaflet/dist/leaflet.css';
-	import type { Map as LeafletMap, LayerGroup, Marker } from 'leaflet';
+	import type { Map as LeafletMap, LayerGroup, Marker, GeoJSON } from 'leaflet';
 
 	let {
 		listings = [],
@@ -25,6 +26,34 @@
 	type GeoStatus = 'idle' | 'locating' | 'active' | 'denied' | 'unavailable';
 	let geoStatus = $state<GeoStatus>('idle');
 
+	// ── layer management ─────────────────────────────────────────
+	type LayerId = 'listings' | 'pois' | 'forest' | 'park';
+
+	const LAYER_DEFS: { id: LayerId; label: string }[] = [
+		{ id: 'listings', label: 'Listings' },
+		{ id: 'pois',     label: 'Points of Interest' },
+		{ id: 'forest',   label: 'Forest Boundary' },
+		{ id: 'park',     label: 'Park Boundary' },
+	];
+
+	let layerVis = $state<Record<LayerId, boolean>>({
+		listings: true, pois: true, forest: true, park: true,
+	});
+
+	// Plain (non-reactive) refs — populated as each layer loads
+	const layerRefs: Partial<Record<LayerId, LayerGroup | GeoJSON>> = {};
+
+	let panelOpen = $state(true);
+
+	function toggleLayer(id: LayerId) {
+		layerVis[id] = !layerVis[id];
+		if (!map) return;
+		const ref = id === 'listings' ? listingLayer : layerRefs[id];
+		if (!ref) return;
+		if (layerVis[id]) ref.addTo(map);
+		else ref.remove();
+	}
+
 	onMount(async () => {
 		L = (await import('leaflet')).default;
 
@@ -40,17 +69,25 @@
 		listingLayer = L.layerGroup().addTo(map);
 
 		const geoStyle = { color: '#228B22', fillColor: '#228B22', fillOpacity: 0.18, weight: 1.5, opacity: 0.5 };
-		for (const path of ['/forest_boundary1.geojson', '/park_boundary1.geojson']) {
+		const geoPaths: [LayerId, string][] = [
+			['forest', '/forest_boundary1.geojson'],
+			['park',   '/park_boundary1.geojson'],
+		];
+		for (const [id, path] of geoPaths) {
 			fetch(path)
 				.then((r) => r.json())
-				.then((data) => L.geoJSON(data, { style: geoStyle }).addTo(map!))
+				.then((data) => {
+					const layer = L.geoJSON(data, { style: geoStyle }).addTo(map!);
+					layerRefs[id] = layer;
+				})
 				.catch(() => console.warn(`Could not load ${path}`));
 		}
 
 		fetch('/pois.json')
 			.then((r) => r.json())
 			.then((pois: { name: string; lat: number; lng: number; cat: string }[]) => {
-				const poiLayer = L.layerGroup().addTo(map!);
+				const layer = L.layerGroup().addTo(map!);
+				layerRefs.pois = layer;
 				const icon = L.divIcon({
 					className: '',
 					html: '<div class="poi-marker">!</div>',
@@ -60,11 +97,11 @@
 				});
 				for (const poi of pois) {
 					L.marker([poi.lat, poi.lng], { icon, zIndexOffset: 500 })
-						.bindTooltip(`<strong>${poi.name}</strong><br><span class="poi-cat">${poi.cat}</span>`, {
-							direction: 'top',
-							offset: [0, -10]
-						})
-						.addTo(poiLayer);
+						.bindTooltip(
+							`<strong>${poi.name}</strong><br><span class="poi-cat">${poi.cat}</span>`,
+							{ direction: 'top', offset: [0, -10] }
+						)
+						.addTo(layer);
 				}
 			})
 			.catch(() => console.warn('Could not load pois.json'));
@@ -114,15 +151,11 @@
 		);
 	}
 
-	// Map a normalized 0–1 value to a green→yellow→red HSL color.
-	// Values outside [min, max] are clamped; missing values return gray.
 	function markerColor(listing: Record<string, string>): string {
 		if (colorParam === 'none') return '#d95f02';
-
 		const raw = listing[colorParam];
 		const value = parseFloat(raw ?? '');
 		if (!raw || isNaN(value) || (colorParam !== 'year_built' && value === 0)) return '#999';
-
 		if (colorMin === colorMax) return 'hsl(60, 80%, 40%)';
 		const t = Math.max(0, Math.min(1, (value - colorMin) / (colorMax - colorMin)));
 		return `hsl(${Math.round(120 * (1 - t))}, 80%, 38%)`;
@@ -204,6 +237,31 @@
 </script>
 
 <div bind:this={mapEl} class="map">
+	<!-- Layer panel -->
+	<div class="layer-panel">
+		<button class="layer-header" onclick={() => (panelOpen = !panelOpen)}>
+			<span>Layers</span>
+			<span class="chevron" class:flipped={panelOpen}>▾</span>
+		</button>
+		{#if panelOpen}
+			<ul class="layer-list" transition:slide={{ duration: 160 }}>
+				{#each LAYER_DEFS as def}
+					<li class="layer-row">
+						<label>
+							<input
+								type="checkbox"
+								checked={layerVis[def.id]}
+								onchange={() => toggleLayer(def.id)}
+							/>
+							<span class="layer-name">{def.label}</span>
+						</label>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+
+	<!-- Locate button -->
 	{#if geoStatus !== 'unavailable'}
 		<button
 			class="locate-btn"
@@ -233,6 +291,72 @@
 		position: relative;
 	}
 
+	/* ── Layer panel ── */
+	.layer-panel {
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 1000;
+		width: 190px;
+		background: rgba(255, 255, 255, 0.96);
+		border-radius: 6px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+		overflow: hidden;
+	}
+
+	.layer-header {
+		width: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.45rem 0.7rem;
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: #222;
+		letter-spacing: 0.01em;
+	}
+	.layer-header:hover { background: rgba(0, 0, 0, 0.04); }
+
+	.chevron {
+		font-size: 1rem;
+		line-height: 1;
+		transition: transform 0.15s;
+		display: inline-block;
+	}
+	.chevron.flipped { transform: rotate(180deg); }
+
+	.layer-list {
+		list-style: none;
+		margin: 0;
+		padding: 0 0 0.3rem;
+		border-top: 1px solid #eee;
+	}
+
+	.layer-row { padding: 0; }
+
+	.layer-row label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.35rem 0.7rem;
+		cursor: pointer;
+		font-size: 0.8rem;
+		color: #333;
+	}
+	.layer-row label:hover { background: rgba(0, 0, 0, 0.04); }
+
+	.layer-row input[type='checkbox'] {
+		accent-color: #1a56db;
+		width: 15px;
+		height: 15px;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	/* ── Locate button ── */
 	.locate-btn {
 		position: absolute;
 		bottom: 24px;
@@ -264,6 +388,7 @@
 	}
 	@keyframes spin { to { transform: rotate(360deg); } }
 
+	/* ── Marker styles ── */
 	:global(.poi-marker) {
 		width: 20px;
 		height: 20px;
@@ -276,7 +401,6 @@
 		border: 2px solid #fff;
 		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 	}
-
 	:global(.poi-cat) { font-size: 0.75rem; color: #666; }
 
 	:global(.marker-lot) {
@@ -295,6 +419,7 @@
 		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 	}
 
+	/* ── Popup styles ── */
 	:global(.lp) { font-size: 0.85rem; line-height: 1.5; }
 	:global(.lp-addr) { font-weight: 600; margin-bottom: 2px; }
 	:global(.lp-price) { color: #1a7a1a; font-weight: 700; font-size: 1rem; margin-bottom: 2px; }
