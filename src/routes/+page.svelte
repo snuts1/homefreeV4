@@ -1,17 +1,13 @@
-<script>
+<script lang="ts">
 	import Map from '$lib/Map.svelte';
 
-	/** @type {Record<string, string>[]} */
-	let listings = $state([]);
+	type Listing = Record<string, string>;
+
+	let listings: Listing[] = $state([]);
 	let statusMsg = $state('');
 	let errorMsg = $state('');
 
-	/**
-	 * Minimal CSV parser that handles quoted fields.
-	 * @param {string} text
-	 * @returns {Record<string, string>[]}
-	 */
-	function parseCSV(text) {
+	function parseCSV(text: string): Listing[] {
 		const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim().split('\n');
 		if (lines.length < 2) return [];
 
@@ -26,9 +22,8 @@
 			});
 	}
 
-	/** @param {string} line */
-	function splitCSVLine(line) {
-		const fields = [];
+	function splitCSVLine(line: string): string[] {
+		const fields: string[] = [];
 		let inQuote = false;
 		let field = '';
 		for (let i = 0; i < line.length; i++) {
@@ -51,30 +46,19 @@
 		return fields;
 	}
 
-	/**
-	 * Detect and normalize a Redfin CSV export row into standard listing fields.
-	 * Redfin mislabels column 9 as "URL" — it's actually BEDS.
-	 * The real listing URL is in the long "URL (SEE ...)" column.
-	 * @param {Record<string, string>} raw
-	 * @returns {Record<string, string>}
-	 */
-	function normalizeRedfin(raw) {
+	// Redfin mislabels column 9 as "URL" — it's actually BEDS.
+	// The real listing URL is in the long "URL (SEE ...)" column.
+	function normalizeRedfin(raw: Listing): Listing {
 		const lotSqft = parseFloat(raw['lot size'] ?? '');
 		const lotAcres = isNaN(lotSqft) ? '' : (lotSqft / 43560).toFixed(2);
 
-		// The real URL key is the long column 21 header — find it by prefix
 		const urlKey = Object.keys(raw).find((k) => k.startsWith('url (see'));
 		const link = urlKey ? raw[urlKey] : '';
 
 		return {
 			lat: raw['latitude'] ?? '',
 			lng: raw['longitude'] ?? '',
-			address: [
-				raw['address'],
-				raw['city'],
-				raw['state or province'],
-				raw['zip or postal code']
-			]
+			address: [raw['address'], raw['city'], raw['state or province'], raw['zip or postal code']]
 				.filter(Boolean)
 				.join(', '),
 			link,
@@ -90,13 +74,11 @@
 		};
 	}
 
-	/** @param {Record<string, string>[]} rows */
-	function isRedfinExport(rows) {
+	function isRedfinExport(rows: Listing[]): boolean {
 		return rows.length > 0 && 'sale type' in rows[0] && 'lot size' in rows[0];
 	}
 
-	/** @param {Event & { currentTarget: HTMLInputElement }} e */
-	function handleFile(e) {
+	function handleFile(e: Event & { currentTarget: HTMLInputElement }) {
 		const file = e.currentTarget.files?.[0];
 		if (!file) return;
 		errorMsg = '';
@@ -106,13 +88,13 @@
 		reader.onload = (ev) => {
 			try {
 				// Redfin exports have a disclaimer row as row 2 — filter out rows with no coordinates
-				let parsed = parseCSV(/** @type {string} */ (ev.target?.result));
+				let parsed = parseCSV(ev.target?.result as string);
 
 				if (isRedfinExport(parsed)) {
 					parsed = parsed.map(normalizeRedfin);
 				}
 
-				const valid = parsed.filter((r) => {
+				const valid = parsed.filter((r: Listing) => {
 					const lat = parseFloat(r.lat ?? r.latitude ?? '');
 					const lng = parseFloat(r.lng ?? r.lon ?? r.longitude ?? '');
 					return !isNaN(lat) && !isNaN(lng);
@@ -148,7 +130,7 @@
 			<input type="file" accept=".csv,text/csv" onchange={handleFile} />
 		</label>
 
-		<a class="sample-link" href="/sample-listings.csv" download>sample CSV</a>
+		<a class="sample-link" href="/redfin_2026-03-28-06-58-34.csv" download>sample CSV</a>
 
 		{#if statusMsg}
 			<span class="status ok">{statusMsg}</span>
