@@ -6,8 +6,8 @@
 	let { listings = [] }: { listings?: Record<string, string>[] } = $props();
 
 	let mapEl: HTMLDivElement;
-	let map: Map | undefined;
-	let listingLayer: LayerGroup | undefined;
+	let map = $state<Map | undefined>(undefined);
+	let listingLayer = $state<LayerGroup | undefined>(undefined);
 	let positionMarker: Marker | undefined;
 	let geoWatchId: number | undefined;
 	let L: typeof import('leaflet');
