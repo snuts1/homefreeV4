@@ -27,17 +27,18 @@
 	let geoStatus = $state<GeoStatus>('idle');
 
 	// ── layer management ─────────────────────────────────────────
-	type LayerId = 'listings' | 'pois' | 'forest' | 'park';
+	type LayerId = 'listings' | 'pois' | 'forest' | 'park' | 'jurisdictions';
 
 	const LAYER_DEFS: { id: LayerId; label: string }[] = [
-		{ id: 'listings', label: 'Listings' },
-		{ id: 'pois',     label: 'Points of Interest' },
-		{ id: 'forest',   label: 'Forest Boundary' },
-		{ id: 'park',     label: 'Park Boundary' },
+		{ id: 'listings',      label: 'Listings' },
+		{ id: 'pois',          label: 'Points of Interest' },
+		{ id: 'forest',        label: 'Forest Boundary' },
+		{ id: 'park',          label: 'Park Boundary' },
+		{ id: 'jurisdictions', label: 'VA Jurisdictions' },
 	];
 
 	let layerVis = $state<Record<LayerId, boolean>>({
-		listings: true, pois: true, forest: true, park: true,
+		listings: true, pois: true, forest: true, park: true, jurisdictions: true,
 	});
 
 	// Plain (non-reactive) refs — populated as each layer loads
@@ -82,6 +83,20 @@
 				})
 				.catch(() => console.warn(`Could not load ${path}`));
 		}
+
+		fetch('/Virginia_Jurisdictions.geojson')
+			.then((r) => r.json())
+			.then((data) => {
+				const layer = L.geoJSON(data, {
+					style: { color: '#555', weight: 1, opacity: 0.5, fillOpacity: 0 },
+					onEachFeature(feature, layer) {
+						const name = feature.properties?.NAMELSAD ?? feature.properties?.NAME;
+						if (name) layer.bindTooltip(name, { sticky: true, opacity: 0.85 });
+					}
+				}).addTo(map!);
+				layerRefs.jurisdictions = layer;
+			})
+			.catch(() => console.warn('Could not load Virginia_Jurisdictions.geojson'));
 
 		fetch('/pois.json')
 			.then((r) => r.json())
