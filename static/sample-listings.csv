@@ -1,6 +1,0 @@
-address,price,beds,baths,sqft,lat,lng,url,notes
-"123 Maple St, Austin TX 78701",485000,3,2,1420,30.2672,-97.7431,https://example.com/1,"Corner lot, recent kitchen remodel"
-"88 Oak Ave, Austin TX 78704",620000,4,3,2100,30.2500,-97.7600,https://example.com/2,"South Austin, walkable neighborhood"
-"412 Cedar Ln, Austin TX 78731",540000,3,2,1650,30.3200,-97.7500,https://example.com/3,"Near Shoal Creek Trail"
-"2201 Elm Blvd, Austin TX 78745",395000,2,1,1050,30.2150,-97.7850,https://example.com/4,"Good starter home, needs some TLC"
-"77 Pine Rd, Austin TX 78750",710000,4,3,2450,30.4000,-97.7700,https://example.com/5,"Large backyard, cul-de-sac"

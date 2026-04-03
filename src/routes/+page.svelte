@@ -51,6 +51,50 @@
 		return fields;
 	}
 
+	/**
+	 * Detect and normalize a Redfin CSV export row into standard listing fields.
+	 * Redfin mislabels column 9 as "URL" — it's actually BEDS.
+	 * The real listing URL is in the long "URL (SEE ...)" column.
+	 * @param {Record<string, string>} raw
+	 * @returns {Record<string, string>}
+	 */
+	function normalizeRedfin(raw) {
+		const lotSqft = parseFloat(raw['lot size'] ?? '');
+		const lotAcres = isNaN(lotSqft) ? '' : (lotSqft / 43560).toFixed(2);
+
+		// The real URL key is the long column 21 header — find it by prefix
+		const urlKey = Object.keys(raw).find((k) => k.startsWith('url (see'));
+		const link = urlKey ? raw[urlKey] : '';
+
+		return {
+			lat: raw['latitude'] ?? '',
+			lng: raw['longitude'] ?? '',
+			address: [
+				raw['address'],
+				raw['city'],
+				raw['state or province'],
+				raw['zip or postal code']
+			]
+				.filter(Boolean)
+				.join(', '),
+			link,
+			sqft: raw['square feet'] ?? '',
+			lot_acres: lotAcres,
+			beds: raw['url'] ?? '', // mislabeled column 9
+			baths: raw['baths'] ?? '',
+			year_built: raw['year built'] ?? '',
+			price: raw['price'] ?? '',
+			price_per_sqft: raw['$/square feet'] ?? '',
+			hoa: raw['hoa/month'] ?? '',
+			status: raw['status'] ?? ''
+		};
+	}
+
+	/** @param {Record<string, string>[]} rows */
+	function isRedfinExport(rows) {
+		return rows.length > 0 && 'sale type' in rows[0] && 'lot size' in rows[0];
+	}
+
 	/** @param {Event & { currentTarget: HTMLInputElement }} e */
 	function handleFile(e) {
 		const file = e.currentTarget.files?.[0];
@@ -61,12 +105,19 @@
 		const reader = new FileReader();
 		reader.onload = (ev) => {
 			try {
-				const parsed = parseCSV(/** @type {string} */ (ev.target?.result));
+				// Redfin exports have a disclaimer row as row 2 — filter out rows with no coordinates
+				let parsed = parseCSV(/** @type {string} */ (ev.target?.result));
+
+				if (isRedfinExport(parsed)) {
+					parsed = parsed.map(normalizeRedfin);
+				}
+
 				const valid = parsed.filter((r) => {
 					const lat = parseFloat(r.lat ?? r.latitude ?? '');
 					const lng = parseFloat(r.lng ?? r.lon ?? r.longitude ?? '');
 					return !isNaN(lat) && !isNaN(lng);
 				});
+
 				listings = valid;
 				if (valid.length === 0) {
 					errorMsg = 'No rows with valid lat/lng found. Check your column names.';

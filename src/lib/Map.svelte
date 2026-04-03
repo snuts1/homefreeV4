@@ -90,12 +90,33 @@
 		listingLayer.clearLayers();
 		const bounds: [number, number][] = [];
 
+		const lotIcon = L.divIcon({
+			className: '',
+			html: '<div class="marker-lot"></div>',
+			iconSize: [12, 12],
+			iconAnchor: [6, 6],
+			popupAnchor: [0, -8]
+		});
+
 		for (const listing of listings) {
 			const lat = parseFloat(listing.lat ?? listing.latitude ?? '');
 			const lng = parseFloat(listing.lng ?? listing.lon ?? listing.longitude ?? '');
 			if (isNaN(lat) || isNaN(lng)) continue;
 
-			const marker = L.marker([lat, lng]).bindPopup(buildPopup(listing), { maxWidth: 280 });
+			const sqft = parseFloat(listing.sqft ?? '');
+			const isLot = !listing.sqft || isNaN(sqft) || sqft === 0;
+
+			const marker = isLot
+				? L.marker([lat, lng], { icon: lotIcon })
+				: L.circleMarker([lat, lng], {
+						radius: 7,
+						color: '#fff',
+						weight: 2,
+						fillColor: '#d95f02',
+						fillOpacity: 0.9
+					});
+
+			marker.bindPopup(buildPopup(listing), { maxWidth: 280 });
 			listingLayer.addLayer(marker);
 			bounds.push([lat, lng]);
 		}
@@ -107,23 +128,30 @@
 
 	function buildPopup(l: Record<string, string>) {
 		const price = l.price ? `$${Number(l.price.replace(/[^0-9.]/g, '')).toLocaleString()}` : '';
+		const ppsf = l.price_per_sqft ? `$${l.price_per_sqft}/sqft` : '';
 		const beds = l.beds || l.bedrooms || '';
 		const baths = l.baths || l.bathrooms || '';
 		const sqft = l.sqft || l.sqft_living || '';
+		const lot = l.lot_acres ? `${l.lot_acres} ac` : '';
+		const year = l.year_built || '';
+		const hoa = l.hoa ? `HOA $${l.hoa}/mo` : '';
 		const address = l.address || l.street || '';
-		const url = l.url || l.link || '';
+		const link = l.link || l.url || '';
 		const notes = l.notes || l.description || '';
 
 		return `<div class="lp">
 			${address ? `<div class="lp-addr">${address}</div>` : ''}
-			${price ? `<div class="lp-price">${price}</div>` : ''}
+			${price ? `<div class="lp-price">${price}${ppsf ? `<span class="lp-ppsf"> · ${ppsf}</span>` : ''}</div>` : ''}
 			<div class="lp-meta">
 				${beds ? `<span>${beds} bd</span>` : ''}
 				${baths ? `<span>${baths} ba</span>` : ''}
 				${sqft ? `<span>${Number(sqft).toLocaleString()} sqft</span>` : ''}
+				${lot ? `<span>${lot}</span>` : ''}
+				${year ? `<span>built ${year}</span>` : ''}
 			</div>
+			${hoa ? `<div class="lp-hoa">${hoa}</div>` : ''}
 			${notes ? `<div class="lp-notes">${notes}</div>` : ''}
-			${url ? `<a class="lp-link" href="${url}" target="_blank" rel="noopener">View listing ↗</a>` : ''}
+			${link ? `<a class="lp-link" href="${link}" target="_blank" rel="noopener">View on Redfin ↗</a>` : ''}
 		</div>`;
 	}
 </script>
@@ -188,6 +216,14 @@
 		animation: spin 1s linear infinite;
 	}
 	@keyframes spin { to { transform: rotate(360deg); } }
+
+	:global(.marker-lot) {
+		width: 12px;
+		height: 12px;
+		background: #d95f02;
+		border: 2px solid #fff;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+	}
 
 	:global(.pos-dot) {
 		width: 16px;
