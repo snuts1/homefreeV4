@@ -27,7 +27,7 @@
 	let geoStatus = $state<GeoStatus>('idle');
 
 	// ── layer management ─────────────────────────────────────────
-	type LayerId = 'listings' | 'pois' | 'forest' | 'park' | 'jurisdictions' | 'soil';
+	type LayerId = 'listings' | 'pois' | 'forest' | 'park' | 'jurisdictions';
 
 	const LAYER_DEFS: { id: LayerId; label: string }[] = [
 		{ id: 'listings',      label: 'Listings' },
@@ -35,11 +35,10 @@
 		{ id: 'forest',        label: 'Forest Boundary' },
 		{ id: 'park',          label: 'Park Boundary' },
 		{ id: 'jurisdictions', label: 'VA Jurisdictions' },
-		{ id: 'soil',          label: 'Soil Data' },
 	];
 
 	let layerVis = $state<Record<LayerId, boolean>>({
-		listings: true, pois: true, forest: true, park: true, jurisdictions: true, soil: true,
+		listings: true, pois: true, forest: true, park: true, jurisdictions: true,
 	});
 
 	// Plain (non-reactive) refs — populated as each layer loads
@@ -98,40 +97,6 @@
 				layerRefs.jurisdictions = layer;
 			})
 			.catch(() => console.warn('Could not load Virginia_Jurisdictions.geojson'));
-
-		fetch('/soil_data.js')
-			.then((r) => r.text())
-			.then((src) => {
-				const json = src.replace(/^\s*var\s+soilData\s*=\s*/, '').replace(/;\s*$/, '');
-				const data = JSON.parse(json);
-				// Capability class 1–8: 1=best (green), 8=worst (gray-red)
-				const capColor: Record<string, string> = {
-					'1': '#1a9641', '2': '#a6d96a', '3': '#ffffbf',
-					'4': '#fdae61', '5': '#d7191c', '6': '#a50026',
-					'7': '#7f0000', '8': '#aaaaaa',
-				};
-				const layer = L.geoJSON(data, {
-					style(feature) {
-						const cap = feature?.properties?.capability ?? '';
-						return {
-							color: '#888', weight: 0.3, opacity: 0.4,
-							fillColor: capColor[cap] ?? '#cccccc',
-							fillOpacity: 0.45,
-						};
-					},
-					onEachFeature(feature, layer) {
-						const p = feature.properties ?? {};
-						layer.bindTooltip(
-							`<strong>${p.muname ?? ''}</strong><br>` +
-							`Capability: ${p.capability ?? '?'} · ${p.farmlndcl ?? ''}<br>` +
-							`Drainage: ${p.drainage ?? ''} · Slope: ${p.slope_pct ?? '?'}%`,
-							{ sticky: true, opacity: 0.9 }
-						);
-					}
-				}).addTo(map!);
-				layerRefs.soil = layer;
-			})
-			.catch(() => console.warn('Could not load soil_data.js'));
 
 		fetch('/pois.json')
 			.then((r) => r.json())
