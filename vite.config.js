@@ -22,8 +22,8 @@ export default defineConfig({
 			workbox: {
 				// Precache the built app shell
 				globPatterns: ['client/**/*.{js,css,html,svg,webp,png}'],
-				// Don't precache large GeoJSON — cache at runtime on first load instead
-				globIgnores: ['**/*.geojson'],
+				// Don't precache large data files — cache at runtime on first load instead
+				globIgnores: ['**/*.geojson', '**/soil_data.js'],
 				runtimeCaching: [
 					// Carto map tiles — cache-first, large bucket, long TTL
 					{
@@ -45,6 +45,16 @@ export default defineConfig({
 						options: {
 							cacheName: 'geojson-layers',
 							expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 },
+							cacheableResponse: { statuses: [0, 200] }
+						}
+					},
+					// Large static data files excluded from precache
+					{
+						urlPattern: /\/soil_data\.js$/i,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'static-data-large',
+							expiration: { maxEntries: 5, maxAgeSeconds: 60 * 60 * 24 * 30 },
 							cacheableResponse: { statuses: [0, 200] }
 						}
 					},
